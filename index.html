@@ -1,0 +1,1031 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Cube Slicer - 27 cubes in six cuts</title>
+<meta name="description" content="Interactive version of the classic puzzle: cut a 3x3x3 cube into 27 unit cubes with as few straight plane cuts as possible, rearranging pieces if you like. Includes the proof that 6 is optimal.">
+<meta name="color-scheme" content="dark">
+<style>
+  :root{
+    --bg:#0f172a; --panel:rgba(15,23,42,.82); --line:rgba(148,163,184,.18);
+    --fg:#e2e8f0; --muted:#94a3b8; --accent:#38bdf8; --red:#f87171; --gold:#fbbf24;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;
+    overflow:hidden;user-select:none;touch-action:none;
+  }
+  a{color:var(--accent)}
+  #canvas-container{position:fixed;inset:0}
+  canvas{display:block}
+
+  #ui{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;justify-content:space-between;padding:14px;pointer-events:none}
+  .panel{
+    pointer-events:auto;background:var(--panel);backdrop-filter:blur(10px);
+    border:1px solid var(--line);border-radius:14px;padding:14px 16px;
+    box-shadow:0 12px 30px -12px rgba(0,0,0,.6);
+  }
+  .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+  #info-panel{max-width:340px}
+  .panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  h1{font-size:1.05rem;margin:0;letter-spacing:-.01em;white-space:nowrap}
+  #info-body p{margin:8px 0;font-size:.86rem;color:var(--muted);line-height:1.5}
+  #info-body ul{margin:8px 0;padding-left:0;list-style:none;display:grid;gap:6px;font-size:.84rem;color:var(--muted)}
+  .tag{display:inline-block;font-size:.68rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:6px;padding:1px 6px;margin-right:6px;vertical-align:1px}
+  .tag-slice{background:rgba(248,113,113,.15);color:#fca5a5;border:1px solid rgba(248,113,113,.3)}
+  .tag-move{background:rgba(56,189,248,.15);color:#7dd3fc;border:1px solid rgba(56,189,248,.3)}
+  #info-body.collapsed{display:none}
+
+  .stats{display:flex;align-items:center;gap:18px}
+  .stat{text-align:center;min-width:52px}
+  .stat-label{font-size:.62rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);font-weight:700}
+  .stat-value{font-size:2rem;font-weight:800;line-height:1.05;font-variant-numeric:tabular-nums}
+  .stat-actions{display:flex;flex-direction:column;gap:6px;border-left:1px solid var(--line);padding-left:16px}
+
+  .btn{
+    appearance:none;border:1px solid var(--line);background:rgba(148,163,184,.1);color:var(--fg);
+    border-radius:9px;padding:7px 12px;font-size:.82rem;font-weight:600;cursor:pointer;
+    transition:background .15s,border-color .15s,transform .05s;font-family:inherit;
+  }
+  .btn:hover:not(:disabled){background:rgba(148,163,184,.2)}
+  .btn:active:not(:disabled){transform:scale(.97)}
+  .btn:disabled{opacity:.4;cursor:default}
+  .btn-danger{color:#fca5a5;border-color:rgba(248,113,113,.3)}
+  .btn-primary{background:var(--accent);color:#082f49;border-color:transparent}
+  .btn-primary:hover:not(:disabled){background:#7dd3fc}
+  .btn-ghost{margin-top:4px;width:100%}
+  .icon-btn{
+    appearance:none;background:transparent;border:1px solid var(--line);color:var(--muted);
+    width:26px;height:26px;border-radius:8px;cursor:pointer;font-size:.9rem;line-height:1;font-family:inherit;
+  }
+  .icon-btn:hover{color:var(--fg);border-color:var(--accent)}
+
+  .bottom{display:flex;flex-direction:column;align-items:center;gap:10px;pointer-events:none}
+  #hint{
+    pointer-events:none;font-size:.82rem;color:var(--muted);background:var(--panel);
+    border:1px solid var(--line);border-radius:999px;padding:6px 14px;white-space:nowrap;max-width:92vw;
+    overflow:hidden;text-overflow:ellipsis;
+  }
+  .modes{pointer-events:auto;display:flex;background:rgba(2,6,23,.7);border:1px solid var(--line);border-radius:999px;padding:4px}
+  .mode{
+    appearance:none;border:0;background:transparent;color:var(--muted);font-family:inherit;
+    padding:9px 30px;border-radius:999px;font-weight:700;font-size:.83rem;cursor:pointer;transition:all .2s;
+  }
+  .mode.active.slice{background:#ef4444;color:#fff;box-shadow:0 0 18px rgba(239,68,68,.35)}
+  .mode.active.move{background:var(--accent);color:#082f49;box-shadow:0 0 18px rgba(56,189,248,.35)}
+
+  .nudge{pointer-events:auto;display:grid;grid-template-columns:repeat(6,1fr);gap:5px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px}
+  .nudge button{
+    appearance:none;border:1px solid var(--line);background:rgba(148,163,184,.08);color:var(--fg);
+    border-radius:7px;padding:7px 10px;font-size:.75rem;font-weight:700;cursor:pointer;font-family:inherit;
+  }
+  .nudge button:hover{background:rgba(148,163,184,.2)}
+
+  .hidden{display:none !important}
+
+  #toast{
+    position:fixed;top:18px;left:50%;transform:translate(-50%,-8px);z-index:40;
+    background:#ef4444;color:#fff;padding:10px 18px;border-radius:10px;font-weight:600;font-size:.85rem;
+    opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.4);
+  }
+  #toast.show{opacity:1;transform:translate(-50%,4px)}
+
+  .modal{position:fixed;inset:0;z-index:30;background:rgba(2,6,23,.72);display:flex;align-items:center;justify-content:center;padding:16px}
+  .modal-card{
+    background:#111c31;border:1px solid var(--line);border-radius:16px;padding:18px 20px;
+    max-width:460px;width:100%;box-shadow:0 24px 60px -20px rgba(0,0,0,.8);
+  }
+  .modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px}
+  .modal-head h2{font-size:1.05rem;margin:0}
+  .modal p{color:var(--muted);font-size:.9rem;line-height:1.55;margin:10px 0}
+  .modal-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px}
+  .proof-canvas{width:100%;height:230px;background:radial-gradient(circle at 50% 40%,#16233c,#0b1322);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .proof-canvas canvas{margin:0 auto}
+  .proof-text{min-height:3.2em}
+  .proof-step{font-size:.78rem;color:var(--muted);font-weight:700;font-variant-numeric:tabular-nums}
+
+  @media (max-width:640px){
+    #info-panel{max-width:none;width:100%}
+    .stat-value{font-size:1.6rem}
+    .stats{gap:12px;padding:10px 12px}
+    .mode{padding:8px 22px}
+    #hint{font-size:.76rem}
+  }
+</style>
+</head>
+<body>
+<div id="canvas-container"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<div id="ui">
+  <div class="top">
+    <section id="info-panel" class="panel">
+      <div class="panel-head">
+        <h1>Cube Slicer</h1>
+        <button id="info-toggle" class="icon-btn" aria-label="Toggle instructions" aria-expanded="true">?</button>
+      </div>
+      <div id="info-body">
+        <p>Cut the 3&times;3&times;3 cube into <strong>27 separate 1&times;1&times;1 pieces</strong> using as few straight plane cuts as you can. You may rearrange pieces between cuts.</p>
+        <ul>
+          <li><span class="tag tag-slice">Slice</span>hover a face to preview a cut plane, then click to cut. One plane through many pieces still costs one cut.</li>
+          <li><span class="tag tag-move">Move</span>drag a piece to restack it. Use the nudge pad or arrow keys for exact steps.</li>
+        </ul>
+        <button id="why-inline" class="btn btn-ghost">Why is 6 the minimum?</button>
+        <p style="font-size:.74rem;margin-bottom:0">
+          Puzzle popularised by
+          <a href="https://www.youtube.com/watch?v=Nbwv5wHQoj0&amp;t=249s" target="_blank" rel="noopener">3Blue1Brown</a>,
+          also known as <a href="https://nrich.maths.org/problems/cubist-cuts" target="_blank" rel="noopener">Cubist Cuts</a>.
+          Code <a href="https://github.com/axillv/cube-slicer" target="_blank" rel="noopener">MIT</a>.
+        </p>
+      </div>
+    </section>
+
+    <section class="panel stats">
+      <div class="stat">
+        <div class="stat-label">Cuts</div>
+        <div id="cut-counter" class="stat-value">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Best</div>
+        <div id="best-value" class="stat-value">&mdash;</div>
+      </div>
+      <div class="stat-actions">
+        <button id="btn-undo" class="btn" disabled>Undo</button>
+        <button id="btn-reset" class="btn btn-danger">Reset</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="bottom">
+    <div id="nudge" class="nudge hidden" aria-label="Nudge selected piece">
+      <button data-nudge="x,-1" title="Move left">X&minus;</button>
+      <button data-nudge="x,1" title="Move right">X+</button>
+      <button data-nudge="y,-1" title="Move down">Y&minus;</button>
+      <button data-nudge="y,1" title="Move up">Y+</button>
+      <button data-nudge="z,-1" title="Move back">Z&minus;</button>
+      <button data-nudge="z,1" title="Move forward">Z+</button>
+    </div>
+    <div id="hint">Hover a face to preview a cut</div>
+    <div class="modes" role="tablist" aria-label="Mode">
+      <button id="mode-slice" class="mode active slice" role="tab" aria-selected="true">Slice</button>
+      <button id="mode-move" class="mode move" role="tab" aria-selected="false">Move</button>
+    </div>
+  </div>
+</div>
+
+<div id="proof-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="proof-title">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2 id="proof-title">Why six cuts are necessary</h2>
+      <button id="proof-close" class="icon-btn" aria-label="Close">&times;</button>
+    </div>
+    <div id="proof-canvas" class="proof-canvas"></div>
+    <p id="proof-text" class="proof-text"></p>
+    <div class="modal-actions">
+      <button id="proof-prev" class="btn">Back</button>
+      <span id="proof-step" class="proof-step">Intro</span>
+      <button id="proof-next" class="btn btn-primary">Next face</button>
+    </div>
+  </div>
+</div>
+
+<div id="solve-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="solve-title">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2 id="solve-title">Solved!</h2>
+      <button id="solve-close" class="icon-btn" aria-label="Close">&times;</button>
+    </div>
+    <p id="solve-text"></p>
+    <div class="modal-actions">
+      <button id="solve-why" class="btn">Why is 6 the minimum?</button>
+      <button id="solve-again" class="btn btn-primary">Play again</button>
+    </div>
+  </div>
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="vendor/OrbitControls.js"></script>
+<script data-goatcounter="https://axillv.goatcounter.com/count" async src="vendor/count.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var CUBE_SIZE = 1;
+  var BLOCK_COLOR = 0xd8a45a;
+  var EDGE_COLOR = 0x2a1c0d;
+
+  var state = {
+    blocks: [],
+    cuts: 0,
+    mode: 'SLICE',
+    best: null,
+    solved: false,
+    selectedGroupId: null
+  };
+  var historyStack = [];
+
+  var scene, camera, renderer, controls, raycaster, boxGeometry, boxEdges, laserPlane;
+  var meshes = [];
+  var pointer = new THREE.Vector2();
+  var hoveredGroupId = null;
+  var activeCut = null;
+  var previewSplits = 0;
+  var isDragging = false;
+  var dragContext = null;
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ---------------------------------------------------------------- tracking
+  function trackEvent(path) {
+    try { if (window.goatcounter && window.goatcounter.count) window.goatcounter.count({ path: path, event: true }); } catch (e) {}
+  }
+  var visibleMs = 0, lastTick = Date.now(), sent30 = false, sent120 = false;
+  function accumulate() {
+    var now = Date.now();
+    if (document.visibilityState === 'visible') visibleMs += now - lastTick;
+    lastTick = now;
+  }
+  setInterval(function () {
+    accumulate();
+    if (!sent30 && visibleMs > 30000) { sent30 = true; trackEvent('engaged-30s'); }
+    if (!sent120 && visibleMs > 120000) { sent120 = true; trackEvent('engaged-2min'); }
+  }, 2000);
+  document.addEventListener('visibilitychange', function () { accumulate(); lastTick = Date.now(); });
+
+  // ------------------------------------------------------------------- setup
+  function init() {
+    var container = $('canvas-container');
+
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.domElement.style.touchAction = 'none';
+    renderer.domElement.setAttribute('aria-label', '3D cube cutting area');
+    container.appendChild(renderer.domElement);
+
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0f172a);
+
+    camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 200);
+    camera.position.set(6.5, 5.5, 8);
+
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 5;
+    controls.maxDistance = 22;
+    controls.enablePan = false;
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x223044, 0.85));
+    var dir = new THREE.DirectionalLight(0xffe9c2, 1.0);
+    dir.position.set(8, 12, 6);
+    dir.castShadow = true;
+    dir.shadow.mapSize.width = 1024;
+    dir.shadow.mapSize.height = 1024;
+    var d = 9;
+    dir.shadow.camera.left = -d; dir.shadow.camera.right = d;
+    dir.shadow.camera.top = d; dir.shadow.camera.bottom = -d;
+    dir.shadow.camera.near = 1; dir.shadow.camera.far = 40;
+    scene.add(dir);
+    var fill = new THREE.DirectionalLight(0x8fb4ff, 0.35);
+    fill.position.set(-8, -4, -6);
+    scene.add(fill);
+
+    var shadowPlane = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ opacity: 0.28 }));
+    shadowPlane.rotation.x = -Math.PI / 2;
+    shadowPlane.position.y = -2.6;
+    shadowPlane.receiveShadow = true;
+    scene.add(shadowPlane);
+
+    var grid = new THREE.GridHelper(24, 24, 0x24344d, 0x18263a);
+    grid.position.y = -2.61;
+    scene.add(grid);
+
+    boxGeometry = new THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE);
+    boxEdges = new THREE.EdgesGeometry(boxGeometry);
+
+    createLaser();
+    raycaster = new THREE.Raycaster();
+
+    var el = renderer.domElement;
+    el.addEventListener('pointermove', onPointerMove);
+    el.addEventListener('pointerdown', onPointerDown);
+    el.addEventListener('pointerleave', onPointerLeave);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('resize', onResize);
+    window.addEventListener('keydown', onKeyDown);
+
+    setupUI();
+    resetPuzzle();
+    animate();
+  }
+
+  function createLaser() {
+    var mat = new THREE.MeshBasicMaterial({
+      color: 0x22d3ee, transparent: true, opacity: 0.28,
+      side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending
+    });
+    laserPlane = new THREE.Mesh(new THREE.PlaneGeometry(9, 9), mat);
+    var grid = new THREE.GridHelper(9, 9, 0x67e8f9, 0x0e7490);
+    grid.rotation.x = Math.PI / 2;
+    grid.material.transparent = true;
+    grid.material.opacity = 0.35;
+    grid.raycast = function () {};
+    laserPlane.add(grid);
+    laserPlane.raycast = function () {};
+    laserPlane.visible = false;
+    scene.add(laserPlane);
+  }
+
+  function resetPuzzle() {
+    meshes.forEach(function (m) { scene.remove(m); });
+    meshes = [];
+    state.blocks = [];
+    state.cuts = 0;
+    state.solved = false;
+    state.selectedGroupId = null;
+    hoveredGroupId = null;
+    activeCut = null;
+    previewSplits = 0;
+    historyStack.length = 0;
+
+    var id = 0;
+    for (var x = -1; x <= 1; x++) {
+      for (var y = -1; y <= 1; y++) {
+        for (var z = -1; z <= 1; z++) {
+          state.blocks.push({ id: id, x: x, y: y, z: z, groupId: 0 });
+          var mat = new THREE.MeshStandardMaterial({ color: BLOCK_COLOR, roughness: 0.62, metalness: 0.06 });
+          var mesh = new THREE.Mesh(boxGeometry, mat);
+          mesh.position.set(x, y, z);
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          mesh.userData.id = id;
+          var edges = new THREE.LineSegments(boxEdges, new THREE.LineBasicMaterial({
+            color: EDGE_COLOR, transparent: true, opacity: 0.55
+          }));
+          mesh.add(edges);
+          scene.add(mesh);
+          meshes.push(mesh);
+          id++;
+        }
+      }
+    }
+    $('solve-modal').classList.add('hidden');
+    updateUI();
+    updateVisuals();
+    updateHint();
+    updateNudge();
+  }
+
+  // ------------------------------------------------------------------ input
+  function setPointer(e) {
+    var rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  }
+
+  function pickBlock() {
+    raycaster.setFromCamera(pointer, camera);
+    var hits = raycaster.intersectObjects(meshes, false);
+    if (!hits.length) return null;
+    var hit = hits[0];
+    var block = null;
+    for (var i = 0; i < state.blocks.length; i++) {
+      if (state.blocks[i].id === hit.object.userData.id) { block = state.blocks[i]; break; }
+    }
+    if (!block) return null;
+    return { hit: hit, block: block };
+  }
+
+  function onPointerMove(e) {
+    setPointer(e);
+
+    if (isDragging) { handleDrag(); return; }
+
+    var p = pickBlock();
+    if (!p) {
+      hoveredGroupId = null;
+      activeCut = null;
+      previewSplits = 0;
+      laserPlane.visible = false;
+      updateVisuals();
+      updateHint();
+      return;
+    }
+
+    if (hoveredGroupId !== p.block.groupId) {
+      hoveredGroupId = p.block.groupId;
+      updateVisuals();
+    }
+
+    if (state.mode === 'SLICE' && !state.solved) {
+      computeCutPreview(p.hit, p.block);
+    } else {
+      laserPlane.visible = false;
+      activeCut = null;
+      previewSplits = 0;
+    }
+    updateHint();
+  }
+
+  function onPointerLeave() {
+    hoveredGroupId = null;
+    activeCut = null;
+    previewSplits = 0;
+    laserPlane.visible = false;
+    updateVisuals();
+    updateHint();
+  }
+
+  function computeCutPreview(hit, block) {
+    var n = hit.face.normal;
+    var dx = hit.point.x - block.x;
+    var dy = hit.point.y - block.y;
+    var dz = hit.point.z - block.z;
+    var axis = '', coord = 0, rx = 0, ry = 0, rz = 0;
+
+    if (Math.abs(n.z) > 0.5) {
+      if (Math.abs(dx) > Math.abs(dy)) { axis = 'x'; coord = block.x + (dx > 0 ? 0.5 : -0.5); ry = Math.PI / 2; }
+      else { axis = 'y'; coord = block.y + (dy > 0 ? 0.5 : -0.5); rx = Math.PI / 2; }
+    } else if (Math.abs(n.x) > 0.5) {
+      if (Math.abs(dy) > Math.abs(dz)) { axis = 'y'; coord = block.y + (dy > 0 ? 0.5 : -0.5); rx = Math.PI / 2; }
+      else { axis = 'z'; coord = block.z + (dz > 0 ? 0.5 : -0.5); }
+    } else {
+      if (Math.abs(dx) > Math.abs(dz)) { axis = 'x'; coord = block.x + (dx > 0 ? 0.5 : -0.5); ry = Math.PI / 2; }
+      else { axis = 'z'; coord = block.z + (dz > 0 ? 0.5 : -0.5); }
+    }
+
+    activeCut = { axis: axis, coord: coord };
+    previewSplits = countSplits(axis, coord);
+
+    laserPlane.rotation.set(rx, ry, rz);
+    laserPlane.position.set(0, 0, 0);
+    laserPlane.position[axis] = coord;
+    laserPlane.visible = true;
+    if (previewSplits > 0) {
+      laserPlane.material.color.setHex(0x22d3ee);
+      laserPlane.material.opacity = 0.3;
+    } else {
+      laserPlane.material.color.setHex(0x64748b);
+      laserPlane.material.opacity = 0.16;
+    }
+  }
+
+  function countSplits(axis, coord) {
+    var groups = new Map();
+    state.blocks.forEach(function (b) {
+      if (!groups.has(b.groupId)) groups.set(b.groupId, []);
+      groups.get(b.groupId).push(b);
+    });
+    var count = 0;
+    groups.forEach(function (list) {
+      var lo = false, hi = false;
+      for (var i = 0; i < list.length; i++) {
+        if (list[i][axis] < coord) lo = true;
+        else if (list[i][axis] > coord) hi = true;
+      }
+      if (lo && hi) count++;
+    });
+    return count;
+  }
+
+  function onPointerDown(e) {
+    if (e.button !== undefined && e.button !== 0) return;
+    setPointer(e);
+
+    if (state.mode === 'SLICE') {
+      if (activeCut && !state.solved) doCut();
+      return;
+    }
+
+    var p = pickBlock();
+    if (p) {
+      state.selectedGroupId = p.block.groupId;
+      initiateDrag(p.hit, p.block);
+    } else {
+      state.selectedGroupId = null;
+    }
+    updateVisuals();
+    updateNudge();
+    updateHint();
+  }
+
+  function initiateDrag(hit, block) {
+    isDragging = true;
+    controls.enabled = false;
+    renderer.domElement.style.cursor = 'grabbing';
+    var normal = hit.face.normal.clone();
+    var plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, hit.point.clone());
+    var groupBlocks = state.blocks.filter(function (b) { return b.groupId === block.groupId; });
+    dragContext = {
+      groupId: block.groupId,
+      plane: plane,
+      start: hit.point.clone(),
+      offsets: groupBlocks.map(function (b) { return { id: b.id, x: b.x, y: b.y, z: b.z }; }),
+      valid: new THREE.Vector3(0, 0, 0)
+    };
+  }
+
+  function handleDrag() {
+    if (!dragContext) return;
+    raycaster.setFromCamera(pointer, camera);
+    var target = new THREE.Vector3();
+    if (!raycaster.ray.intersectPlane(dragContext.plane, target)) return;
+
+    var delta = target.clone().sub(dragContext.start);
+    var snapped = new THREE.Vector3(Math.round(delta.x), Math.round(delta.y), Math.round(delta.z));
+    if (snapped.x === dragContext.valid.x && snapped.y === dragContext.valid.y && snapped.z === dragContext.valid.z) return;
+
+    var temp = state.blocks.map(function (b) { return { id: b.id, x: b.x, y: b.y, z: b.z, groupId: b.groupId }; });
+    var collision = false;
+    for (var i = 0; i < dragContext.offsets.length; i++) {
+      var off = dragContext.offsets[i];
+      var b = null;
+      for (var j = 0; j < temp.length; j++) { if (temp[j].id === off.id) { b = temp[j]; break; } }
+      if (!b) continue;
+      b.x = off.x + snapped.x; b.y = off.y + snapped.y; b.z = off.z + snapped.z;
+      for (var k = 0; k < temp.length; k++) {
+        var o = temp[k];
+        if (o.groupId !== dragContext.groupId && o.x === b.x && o.y === b.y && o.z === b.z) { collision = true; break; }
+      }
+      if (collision) break;
+    }
+    if (!collision) {
+      dragContext.valid.copy(snapped);
+      applyPositions(temp);
+    }
+  }
+
+  function onPointerUp() {
+    if (!isDragging) return;
+    isDragging = false;
+    controls.enabled = true;
+    renderer.domElement.style.cursor = '';
+
+    if (dragContext) {
+      var v = dragContext.valid;
+      if (v.x !== 0 || v.y !== 0 || v.z !== 0) {
+        pushHistory();
+        dragContext.offsets.forEach(function (off) {
+          for (var i = 0; i < state.blocks.length; i++) {
+            var b = state.blocks[i];
+            if (b.id === off.id) { b.x = off.x + v.x; b.y = off.y + v.y; b.z = off.z + v.z; break; }
+          }
+        });
+      }
+      dragContext = null;
+    }
+    syncMeshes();
+    updateHint();
+  }
+
+  function applyPositions(list) {
+    list.forEach(function (b) {
+      for (var i = 0; i < meshes.length; i++) {
+        if (meshes[i].userData.id === b.id) { meshes[i].position.set(b.x, b.y, b.z); break; }
+      }
+    });
+  }
+
+  function syncMeshes() {
+    state.blocks.forEach(function (b) {
+      for (var i = 0; i < meshes.length; i++) {
+        if (meshes[i].userData.id === b.id) { meshes[i].position.set(b.x, b.y, b.z); break; }
+      }
+    });
+  }
+
+  // -------------------------------------------------------------------- cuts
+  function doCut() {
+    if (!activeCut) return;
+    var axis = activeCut.axis, coord = activeCut.coord;
+    var next = state.blocks.map(function (b) { return { id: b.id, x: b.x, y: b.y, z: b.z, groupId: b.groupId }; });
+
+    var maxGroup = 0;
+    next.forEach(function (b) { if (b.groupId > maxGroup) maxGroup = b.groupId; });
+
+    var groups = new Map();
+    next.forEach(function (b) {
+      if (!groups.has(b.groupId)) groups.set(b.groupId, []);
+      groups.get(b.groupId).push(b);
+    });
+
+    var made = false;
+    groups.forEach(function (list) {
+      var lo = [], hi = [];
+      list.forEach(function (b) { if (b[axis] < coord) lo.push(b); else if (b[axis] > coord) hi.push(b); });
+      if (lo.length && hi.length) {
+        made = true;
+        maxGroup++;
+        hi.forEach(function (b) { b.groupId = maxGroup; });
+      }
+    });
+
+    if (!made) { showToast('That plane would not divide any piece.'); return; }
+
+    pushHistory();
+    state.blocks = next;
+    state.cuts++;
+    previewSplits = countSplits(axis, coord);
+    updateUI();
+    updateVisuals();
+    updateHint();
+    flashLaser();
+    checkSolved();
+  }
+
+  function flashLaser() {
+    if (!laserPlane) return;
+    laserPlane.material.color.setHex(0xffffff);
+    laserPlane.material.opacity = 0.7;
+    setTimeout(function () {
+      if (!laserPlane) return;
+      laserPlane.material.color.setHex(previewSplits > 0 ? 0x22d3ee : 0x64748b);
+      laserPlane.material.opacity = previewSplits > 0 ? 0.3 : 0.16;
+    }, 140);
+  }
+
+  function checkSolved() {
+    var unique = new Set(state.blocks.map(function (b) { return b.groupId; }));
+    if (unique.size !== 27 || state.solved) return;
+    state.solved = true;
+    if (laserPlane) laserPlane.visible = false;
+    activeCut = null;
+    previewSplits = 0;
+
+    var best = readBest();
+    if (best === null || state.cuts < best) { best = state.cuts; writeBest(best); }
+    state.best = best;
+    updateUI();
+    updateHint();
+    trackEvent('solved-' + state.cuts + 'cuts');
+    showSolveModal(state.cuts, best);
+  }
+
+  function readBest() {
+    try {
+      var v = parseInt(localStorage.getItem('cubeSlicerBest') || '', 10);
+      return isNaN(v) ? null : v;
+    } catch (e) { return null; }
+  }
+  function writeBest(v) { try { localStorage.setItem('cubeSlicerBest', String(v)); } catch (e) {} }
+
+  // ----------------------------------------------------------------- history
+  function pushHistory() {
+    historyStack.push({
+      blocks: state.blocks.map(function (b) { return { id: b.id, x: b.x, y: b.y, z: b.z, groupId: b.groupId }; }),
+      cuts: state.cuts
+    });
+    updateUI();
+  }
+
+  function undo() {
+    if (!historyStack.length) return;
+    var prev = historyStack.pop();
+    state.blocks = prev.blocks;
+    state.cuts = prev.cuts;
+    state.solved = false;
+    state.selectedGroupId = null;
+    activeCut = null;
+    previewSplits = 0;
+    laserPlane.visible = false;
+    $('solve-modal').classList.add('hidden');
+    syncMeshes();
+    updateUI();
+    updateVisuals();
+    updateNudge();
+    updateHint();
+  }
+
+  function nudgeGroup(axis, dir) {
+    if (state.selectedGroupId === null) return;
+    var gid = state.selectedGroupId;
+    var groupBlocks = state.blocks.filter(function (b) { return b.groupId === gid; });
+    var temp = state.blocks.map(function (b) { return { id: b.id, x: b.x, y: b.y, z: b.z, groupId: b.groupId }; });
+    var collision = false;
+    for (var i = 0; i < groupBlocks.length; i++) {
+      var t = null;
+      for (var j = 0; j < temp.length; j++) { if (temp[j].id === groupBlocks[i].id) { t = temp[j]; break; } }
+      if (!t) continue;
+      t[axis] += dir;
+      for (var k = 0; k < temp.length; k++) {
+        var o = temp[k];
+        if (o.groupId !== gid && o.x === t.x && o.y === t.y && o.z === t.z) { collision = true; break; }
+      }
+      if (collision) break;
+    }
+    if (collision) { showToast('Blocked: another piece is in the way.'); return; }
+    pushHistory();
+    groupBlocks.forEach(function (b) {
+      for (var i = 0; i < state.blocks.length; i++) {
+        if (state.blocks[i].id === b.id) { state.blocks[i][axis] += dir; break; }
+      }
+    });
+    syncMeshes();
+    updateHint();
+  }
+
+  // --------------------------------------------------------------------- UI
+  function setupUI() {
+    $('btn-undo').addEventListener('click', undo);
+    $('btn-reset').addEventListener('click', resetPuzzle);
+
+    $('mode-slice').addEventListener('click', function () { setMode('SLICE'); });
+    $('mode-move').addEventListener('click', function () { setMode('MOVE'); });
+
+    $('info-toggle').addEventListener('click', function () {
+      var body = $('info-body');
+      body.classList.toggle('collapsed');
+      this.setAttribute('aria-expanded', body.classList.contains('collapsed') ? 'false' : 'true');
+    });
+
+    $('nudge').addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-nudge]');
+      if (!btn) return;
+      var parts = btn.getAttribute('data-nudge').split(',');
+      nudgeGroup(parts[0], parseInt(parts[1], 10));
+    });
+
+    $('why-inline').addEventListener('click', openProof);
+    $('proof-close').addEventListener('click', closeModals);
+    $('proof-prev').addEventListener('click', function () { proofGo(-1); });
+    $('proof-next').addEventListener('click', function () { proofGo(1); });
+    $('solve-close').addEventListener('click', closeModals);
+    $('solve-again').addEventListener('click', function () { $('solve-modal').classList.add('hidden'); resetPuzzle(); });
+    $('solve-why').addEventListener('click', function () { $('solve-modal').classList.add('hidden'); openProof(); });
+
+    if (window.innerWidth < 640) {
+      $('info-body').classList.add('collapsed');
+      $('info-toggle').setAttribute('aria-expanded', 'false');
+    }
+  }
+
+  function setMode(mode) {
+    state.mode = mode;
+    var slice = $('mode-slice'), move = $('mode-move');
+    slice.classList.toggle('active', mode === 'SLICE');
+    move.classList.toggle('active', mode === 'MOVE');
+    slice.setAttribute('aria-selected', mode === 'SLICE' ? 'true' : 'false');
+    move.setAttribute('aria-selected', mode === 'MOVE' ? 'true' : 'false');
+    if (mode === 'SLICE') {
+      state.selectedGroupId = null;
+    } else {
+      laserPlane.visible = false;
+      activeCut = null;
+      previewSplits = 0;
+    }
+    renderer.domElement.style.cursor = mode === 'SLICE' ? 'crosshair' : 'grab';
+    updateVisuals();
+    updateNudge();
+    updateHint();
+  }
+
+  function updateUI() {
+    $('cut-counter').textContent = String(state.cuts);
+    if (state.best === null) state.best = readBest();
+    $('best-value').textContent = state.best === null ? '\u2014' : String(state.best);
+    $('btn-undo').disabled = historyStack.length === 0;
+  }
+
+  function updateVisuals() {
+    meshes.forEach(function (m) {
+      var b = null;
+      for (var i = 0; i < state.blocks.length; i++) { if (state.blocks[i].id === m.userData.id) { b = state.blocks[i]; break; } }
+      m.material.emissive.setHex(0x000000);
+      if (!b) return;
+      var hover = hoveredGroupId !== null && b.groupId === hoveredGroupId;
+      var selected = state.mode === 'MOVE' && state.selectedGroupId !== null && b.groupId === state.selectedGroupId;
+      if (hover) m.material.emissive.setHex(state.mode === 'SLICE' ? 0x5a1f1f : 0x1f3a5a);
+      else if (selected) m.material.emissive.setHex(0x24486b);
+    });
+  }
+
+  function updateNudge() {
+    var show = state.mode === 'MOVE' && state.selectedGroupId !== null && !state.solved;
+    $('nudge').classList.toggle('hidden', !show);
+  }
+
+  function fmt(v) { return (v > 0 ? '+' : '\u2212') + Math.abs(v).toFixed(1); }
+
+  function updateHint() {
+    var hint = $('hint');
+    if (state.solved) { hint.textContent = 'Solved!'; return; }
+    if (state.mode === 'SLICE') {
+      if (activeCut && previewSplits > 0) {
+        hint.textContent = 'Plane ' + activeCut.axis.toUpperCase() + ' = ' + fmt(activeCut.coord) +
+          ' \u00b7 splits ' + previewSplits + ' piece' + (previewSplits > 1 ? 's' : '') + ' \u00b7 1 cut';
+      } else if (activeCut) {
+        hint.textContent = 'Plane ' + activeCut.axis.toUpperCase() + ' = ' + fmt(activeCut.coord) + ' \u00b7 no piece divided';
+      } else {
+        hint.textContent = 'Hover a face to preview a cut';
+      }
+    } else {
+      hint.textContent = state.selectedGroupId === null
+        ? 'Drag a piece to move it'
+        : 'Drag, use the nudge pad, or arrow keys / Q,E';
+    }
+  }
+
+  function showToast(msg) {
+    var t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(function () { t.classList.remove('show'); }, 2200);
+  }
+
+  // ------------------------------------------------------------------- keys
+  function cameraBasisXZ() {
+    var f = new THREE.Vector3();
+    camera.getWorldDirection(f);
+    f.y = 0;
+    if (f.lengthSq() < 1e-6) f.set(0, 0, -1);
+    f.normalize();
+    var r = new THREE.Vector3().crossVectors(f, new THREE.Vector3(0, 1, 0)).normalize();
+    return { f: f, r: r };
+  }
+  function dominant(v) {
+    if (Math.abs(v.x) >= Math.abs(v.z)) return { axis: 'x', dir: v.x >= 0 ? 1 : -1 };
+    return { axis: 'z', dir: v.z >= 0 ? 1 : -1 };
+  }
+  function onKeyDown(e) {
+    if (e.key === 'Escape') { closeModals(); return; }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); undo(); return; }
+    if (state.mode !== 'MOVE' || state.selectedGroupId === null) return;
+    var mv = null, a;
+    if (e.key === 'ArrowUp') mv = dominant(cameraBasisXZ().f);
+    else if (e.key === 'ArrowDown') { a = dominant(cameraBasisXZ().f); mv = { axis: a.axis, dir: -a.dir }; }
+    else if (e.key === 'ArrowRight') mv = dominant(cameraBasisXZ().r);
+    else if (e.key === 'ArrowLeft') { a = dominant(cameraBasisXZ().r); mv = { axis: a.axis, dir: -a.dir }; }
+    else if (e.key === 'e' || e.key === 'E') mv = { axis: 'y', dir: 1 };
+    else if (e.key === 'q' || e.key === 'Q') mv = { axis: 'y', dir: -1 };
+    if (mv) { e.preventDefault(); nudgeGroup(mv.axis, mv.dir); }
+  }
+
+  // ------------------------------------------------------------ proof modal
+  var proof = null;
+  var PROOF_FACES = [
+    { axis: 'x', coord: -0.5, rx: 0, ry: Math.PI / 2, rz: 0 },
+    { axis: 'x', coord: 0.5, rx: 0, ry: Math.PI / 2, rz: 0 },
+    { axis: 'y', coord: -0.5, rx: Math.PI / 2, ry: 0, rz: 0 },
+    { axis: 'y', coord: 0.5, rx: Math.PI / 2, ry: 0, rz: 0 },
+    { axis: 'z', coord: -0.5, rx: 0, ry: 0, rz: 0 },
+    { axis: 'z', coord: 0.5, rx: 0, ry: 0, rz: 0 }
+  ];
+  var PROOF_STEPS = [
+    'The centre piece is completely surrounded. To separate it from the 26 others, every one of its six faces has to be freed by a cut.',
+    'Face 1 of 6: a cut must pass exactly along this face (x = \u22120.5) to release it.',
+    'Face 2 of 6: the opposite face (x = +0.5) is a different plane, so it needs its own cut.',
+    'Face 3 of 6: the bottom face (y = \u22120.5).',
+    'Face 4 of 6: the top face (y = +0.5).',
+    'Face 5 of 6: the back face (z = \u22120.5).',
+    'Face 6 of 6: the front face (z = +0.5).',
+    'The centre cube\u2019s six faces lie in six different planes, and one straight cut can contain at most one of them. So at least 6 cuts are unavoidable \u2014 no amount of rearranging can help. And 6 is enough: two cuts in each of the three directions. The minimum is exactly 6.'
+  ];
+
+  function openProof() {
+    $('solve-modal').classList.add('hidden');
+    $('proof-modal').classList.remove('hidden');
+    if (!proof) initProof();
+    proof.step = 0;
+    applyProofStep();
+    proofLoop();
+  }
+
+  function initProof() {
+    var host = $('proof-canvas');
+    var w = host.clientWidth || 400;
+    var h = host.clientHeight || 230;
+    var r = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    r.setSize(w, h, false);
+    r.domElement.style.width = '100%';
+    r.domElement.style.height = '100%';
+    host.appendChild(r.domElement);
+
+    var s = new THREE.Scene();
+    var cam = new THREE.PerspectiveCamera(38, w / h, 0.1, 100);
+    cam.position.set(4.4, 3.7, 5.4);
+    cam.lookAt(0, 0, 0);
+    s.add(new THREE.HemisphereLight(0xffffff, 0x223044, 1.0));
+    var dl = new THREE.DirectionalLight(0xffffff, 0.85);
+    dl.position.set(4, 7, 5);
+    s.add(dl);
+
+    var geo = new THREE.BoxGeometry(1, 1, 1);
+    var centerMesh = null;
+    for (var x = -1; x <= 1; x++) {
+      for (var y = -1; y <= 1; y++) {
+        for (var z = -1; z <= 1; z++) {
+          var isCenter = (x === 0 && y === 0 && z === 0);
+          var mat = new THREE.MeshStandardMaterial({
+            color: isCenter ? 0xffcf6b : 0x4b6b8f,
+            transparent: true, opacity: isCenter ? 1 : 0.16,
+            roughness: 0.6, metalness: 0.05
+          });
+          var m = new THREE.Mesh(geo, mat);
+          m.position.set(x, y, z);
+          s.add(m);
+          if (isCenter) centerMesh = m;
+        }
+      }
+    }
+    if (centerMesh) {
+      centerMesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo),
+        new THREE.LineBasicMaterial({ color: 0xfff1c9 })));
+    }
+
+    var plane = new THREE.Mesh(
+      new THREE.PlaneGeometry(3.6, 3.6),
+      new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.34, side: THREE.DoubleSide, depthWrite: false })
+    );
+    plane.visible = false;
+    s.add(plane);
+
+    proof = { renderer: r, scene: s, camera: cam, plane: plane, step: 0, raf: null };
+  }
+
+  function proofGo(delta) {
+    if (!proof) return;
+    var s = proof.step + delta;
+    if (s < 0 || s >= PROOF_STEPS.length) return;
+    proof.step = s;
+    applyProofStep();
+  }
+
+  function applyProofStep() {
+    var s = proof.step;
+    $('proof-text').textContent = PROOF_STEPS[s];
+    $('proof-step').textContent = s === 0 ? 'Intro' : (s <= 6 ? (s + ' / 6') : 'Conclusion');
+    $('proof-prev').disabled = s === 0;
+    $('proof-next').disabled = s === PROOF_STEPS.length - 1;
+    $('proof-next').textContent = s === PROOF_STEPS.length - 2 ? 'Conclusion' : 'Next face';
+    if (s >= 1 && s <= 6) {
+      var f = PROOF_FACES[s - 1];
+      proof.plane.visible = true;
+      proof.plane.rotation.set(f.rx, f.ry, f.rz);
+      proof.plane.position.set(0, 0, 0);
+      proof.plane.position[f.axis] = f.coord;
+    } else {
+      proof.plane.visible = false;
+    }
+  }
+
+  function proofLoop() {
+    if (!proof) return;
+    if ($('proof-modal').classList.contains('hidden')) { proof.raf = null; return; }
+    proof.raf = requestAnimationFrame(proofLoop);
+    proof.renderer.render(proof.scene, proof.camera);
+  }
+
+  function closeModals() {
+    $('proof-modal').classList.add('hidden');
+    $('solve-modal').classList.add('hidden');
+  }
+
+  function showSolveModal(cuts, best) {
+    var optimal = (cuts === 6);
+    $('solve-title').textContent = optimal ? 'Solved in 6 cuts \u2014 optimal!' : 'Solved in ' + cuts + ' cuts';
+    var text = optimal
+      ? 'Six is the provable minimum. Nicely done.'
+      : 'The minimum is 6. You used ' + cuts + '. Try to find the 6-cut solution, or see why 5 is impossible.';
+    if (best !== null && best !== undefined) text += ' Best so far: ' + best + '.';
+    $('solve-text').textContent = text;
+    $('solve-modal').classList.remove('hidden');
+  }
+
+  // ------------------------------------------------------------------ resize
+  function onResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+
+  // Small hook so the behaviour can be verified without a UI (used by the test
+  // below; harmless in production and handy for debugging).
+  window.__cubeSlicer = {
+    state: state,
+    reset: resetPuzzle,
+    setMode: setMode,
+    groups: function () { return new Set(state.blocks.map(function (b) { return b.groupId; })).size; },
+    splits: function (axis, coord) { return countSplits(axis, coord); },
+    cut: function (axis, coord) { activeCut = { axis: axis, coord: coord }; doCut(); }
+  };
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+</body>
+</html>
