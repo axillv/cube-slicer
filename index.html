@@ -17,6 +17,7 @@
     margin:0;background:var(--bg);color:var(--fg);
     font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;
     overflow:hidden;user-select:none;touch-action:none;
+    -webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;
   }
   a{color:var(--accent)}
   #canvas-container{position:fixed;inset:0}
@@ -32,6 +33,8 @@
   #info-panel{max-width:340px}
   .panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
   h1{font-size:1.05rem;margin:0;letter-spacing:-.01em;white-space:nowrap}
+  .panel-head{cursor:pointer}
+  #info-body{max-height:52vh;overflow:auto}
   #info-body p{margin:8px 0;font-size:.86rem;color:var(--muted);line-height:1.5}
   #info-body ul{margin:8px 0;padding-left:0;list-style:none;display:grid;gap:6px;font-size:.84rem;color:var(--muted)}
   .tag{display:inline-block;font-size:.68rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:6px;padding:1px 6px;margin-right:6px;vertical-align:1px}
@@ -77,6 +80,15 @@
   .mode.active.slice{background:#ef4444;color:#fff;box-shadow:0 0 18px rgba(239,68,68,.35)}
   .mode.active.move{background:var(--accent);color:#082f49;box-shadow:0 0 18px rgba(56,189,248,.35)}
 
+  .controls-row{pointer-events:auto;display:flex;align-items:center;gap:10px}
+  .rot-btn{
+    appearance:none;width:46px;height:46px;border-radius:50%;border:1px solid var(--line);
+    background:var(--panel);backdrop-filter:blur(10px);color:var(--fg);font-size:1.5rem;line-height:1;
+    cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;
+  }
+  .rot-btn:hover{background:rgba(148,163,184,.2)}
+  .rot-btn:active{transform:scale(.95)}
+
   .nudge{pointer-events:auto;display:grid;grid-template-columns:repeat(6,1fr);gap:5px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px}
   .nudge button{
     appearance:none;border:1px solid var(--line);background:rgba(148,163,184,.08);color:var(--fg);
@@ -92,6 +104,13 @@
     opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.4);
   }
   #toast.show{opacity:1;transform:translate(-50%,4px)}
+
+  .fallback{
+    position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:50;
+    max-width:340px;text-align:center;background:#111c31;border:1px solid var(--line);
+    border-radius:14px;padding:18px 20px;color:#fca5a5;font-size:.9rem;line-height:1.55;
+    box-shadow:0 24px 60px -20px rgba(0,0,0,.8);
+  }
 
   .modal{position:fixed;inset:0;z-index:30;background:rgba(2,6,23,.72);display:flex;align-items:center;justify-content:center;padding:16px}
   .modal-card{
@@ -119,19 +138,20 @@
 <body>
 <div id="canvas-container"></div>
 <div id="toast" role="status" aria-live="polite"></div>
+<div id="fallback" class="fallback hidden" role="alert"></div>
 
 <div id="ui">
   <div class="top">
     <section id="info-panel" class="panel">
-      <div class="panel-head">
+      <div class="panel-head" role="button" tabindex="0" aria-label="Show or hide instructions">
         <h1>Cube Slicer</h1>
-        <button id="info-toggle" class="icon-btn" aria-label="Toggle instructions" aria-expanded="true">?</button>
+        <button id="info-toggle" class="icon-btn" aria-label="Show or hide instructions" aria-expanded="true">?</button>
       </div>
       <div id="info-body">
-        <p>Cut the 3&times;3&times;3 cube into <strong>27 separate 1&times;1&times;1 pieces</strong> using as few straight plane cuts as you can. You may rearrange pieces between cuts.</p>
+        <p>Cut the 3&times;3&times;3 cube into <strong>27 separate 1&times;1&times;1 pieces</strong> with as few plane cuts as you can. Rearranging between cuts is allowed.</p>
         <ul>
-          <li><span class="tag tag-slice">Slice</span>hover a face to preview a cut plane, then click to cut. One plane through many pieces still costs one cut.</li>
-          <li><span class="tag tag-move">Move</span>drag a piece to restack it. Use the nudge pad or arrow keys for exact steps.</li>
+          <li><span class="tag tag-slice">Slice</span>tap a face to cut (on desktop, hover to preview then click). One plane through many pieces still costs one cut.</li>
+          <li><span class="tag tag-move">Move</span>drag a piece to restack it; use the nudge pad for exact steps. Drag the background or pinch to rotate/zoom.</li>
         </ul>
         <button id="why-inline" class="btn btn-ghost">Why is 6 the minimum?</button>
         <p style="font-size:.74rem;margin-bottom:0">
@@ -169,10 +189,14 @@
       <button data-nudge="z,-1" title="Move back">Z&minus;</button>
       <button data-nudge="z,1" title="Move forward">Z+</button>
     </div>
-    <div id="hint">Hover a face to preview a cut</div>
-    <div class="modes" role="tablist" aria-label="Mode">
-      <button id="mode-slice" class="mode active slice" role="tab" aria-selected="true">Slice</button>
-      <button id="mode-move" class="mode move" role="tab" aria-selected="false">Move</button>
+    <div id="hint">Tap a face to cut</div>
+    <div class="controls-row">
+      <button id="rot-left" class="rot-btn" aria-label="Rotate view left">&lsaquo;</button>
+      <div class="modes" role="tablist" aria-label="Mode">
+        <button id="mode-slice" class="mode active slice" role="tab" aria-selected="true">Slice</button>
+        <button id="mode-move" class="mode move" role="tab" aria-selected="false">Move</button>
+      </div>
+      <button id="rot-right" class="rot-btn" aria-label="Rotate view right">&rsaquo;</button>
     </div>
   </div>
 </div>
@@ -236,6 +260,11 @@
   var previewSplits = 0;
   var isDragging = false;
   var dragContext = null;
+  var activePointerId = null;
+  var pointerDown = null;
+  var pendingCut = null;
+  var TAP_MOVE = 12;   // px of movement still counted as a tap
+  var TAP_TIME = 700;  // ms
 
   var $ = function (id) { return document.getElementById(id); };
 
@@ -260,7 +289,17 @@
   function init() {
     var container = $('canvas-container');
 
-    renderer = new THREE.WebGLRenderer({ antialias: true });
+    var probe = document.createElement('canvas');
+    if (!(probe.getContext('webgl') || probe.getContext('experimental-webgl'))) {
+      showFatal('This browser does not support WebGL, which the 3D cube needs. Try Chrome, Firefox or Safari with hardware acceleration enabled.');
+      return;
+    }
+
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+    } catch (e1) {
+      renderer = new THREE.WebGLRenderer({ antialias: false });
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
@@ -268,6 +307,10 @@
     renderer.domElement.style.touchAction = 'none';
     renderer.domElement.setAttribute('aria-label', '3D cube cutting area');
     container.appendChild(renderer.domElement);
+    renderer.domElement.addEventListener('webglcontextlost', function (ev) {
+      ev.preventDefault();
+      showFatal('The 3D view lost its graphics context. Reload the page to continue.');
+    }, false);
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0f172a);
@@ -281,6 +324,9 @@
     controls.minDistance = 5;
     controls.maxDistance = 22;
     controls.enablePan = false;
+    // Two fingers rotate + zoom (one finger is for cutting / moving pieces).
+    if (THREE.TOUCH && THREE.TOUCH.DOLLY_ROTATE) controls.touches.TWO = THREE.TOUCH.DOLLY_ROTATE;
+    applyTouchMode();
 
     scene.add(new THREE.HemisphereLight(0xffffff, 0x223044, 0.85));
     var dir = new THREE.DirectionalLight(0xffe9c2, 1.0);
@@ -318,6 +364,8 @@
     el.addEventListener('pointerdown', onPointerDown);
     el.addEventListener('pointerleave', onPointerLeave);
     window.addEventListener('pointerup', onPointerUp);
+    el.addEventListener('pointercancel', onPointerCancel);
+    window.addEventListener('pointercancel', onPointerCancel);
     window.addEventListener('resize', onResize);
     window.addEventListener('keydown', onKeyDown);
 
@@ -404,6 +452,10 @@
   }
 
   function onPointerMove(e) {
+    if (pointerDown && !pointerDown.moved) {
+      var mdx = e.clientX - pointerDown.x, mdy = e.clientY - pointerDown.y;
+      if (mdx * mdx + mdy * mdy > TAP_MOVE * TAP_MOVE) { pointerDown.moved = true; pendingCut = null; }
+    }
     setPointer(e);
 
     if (isDragging) { handleDrag(); return; }
@@ -443,30 +495,44 @@
     updateHint();
   }
 
-  function computeCutPreview(hit, block) {
+  // Pick the grid plane nearest to the point the user touched, preferring one
+  // that actually divides a piece. Works for hover (desktop) and tap (touch).
+  function chooseCut(hit, block) {
     var n = hit.face.normal;
-    var dx = hit.point.x - block.x;
-    var dy = hit.point.y - block.y;
-    var dz = hit.point.z - block.z;
-    var axis = '', coord = 0, rx = 0, ry = 0, rz = 0;
+    var axes;
+    if (Math.abs(n.x) > 0.5) axes = ['y', 'z'];
+    else if (Math.abs(n.y) > 0.5) axes = ['x', 'z'];
+    else axes = ['x', 'y'];
 
-    if (Math.abs(n.z) > 0.5) {
-      if (Math.abs(dx) > Math.abs(dy)) { axis = 'x'; coord = block.x + (dx > 0 ? 0.5 : -0.5); ry = Math.PI / 2; }
-      else { axis = 'y'; coord = block.y + (dy > 0 ? 0.5 : -0.5); rx = Math.PI / 2; }
-    } else if (Math.abs(n.x) > 0.5) {
-      if (Math.abs(dy) > Math.abs(dz)) { axis = 'y'; coord = block.y + (dy > 0 ? 0.5 : -0.5); rx = Math.PI / 2; }
-      else { axis = 'z'; coord = block.z + (dz > 0 ? 0.5 : -0.5); }
-    } else {
-      if (Math.abs(dx) > Math.abs(dz)) { axis = 'x'; coord = block.x + (dx > 0 ? 0.5 : -0.5); ry = Math.PI / 2; }
-      else { axis = 'z'; coord = block.z + (dz > 0 ? 0.5 : -0.5); }
-    }
+    var p = hit.point;
+    var best = null, bestScore = null;
+    axes.forEach(function (ax) {
+      [-0.5, 0.5].forEach(function (off) {
+        var coord = block[ax] + off;
+        var d = Math.abs(p[ax] - coord);
+        var splits = countSplits(ax, coord);
+        var score = (splits > 0 ? 0 : 1000) + d;
+        if (bestScore === null || score < bestScore) {
+          bestScore = score;
+          best = { axis: ax, coord: coord };
+        }
+      });
+    });
+    return best;
+  }
 
-    activeCut = { axis: axis, coord: coord };
-    previewSplits = countSplits(axis, coord);
+  function computeCutPreview(hit, block) {
+    var cut = chooseCut(hit, block);
+    activeCut = cut;
+    previewSplits = countSplits(cut.axis, cut.coord);
+
+    var rx = 0, ry = 0, rz = 0;
+    if (cut.axis === 'x') ry = Math.PI / 2;
+    else if (cut.axis === 'y') rx = Math.PI / 2;
 
     laserPlane.rotation.set(rx, ry, rz);
     laserPlane.position.set(0, 0, 0);
-    laserPlane.position[axis] = coord;
+    laserPlane.position[cut.axis] = cut.coord;
     laserPlane.visible = true;
     if (previewSplits > 0) {
       laserPlane.material.color.setHex(0x22d3ee);
@@ -497,17 +563,41 @@
 
   function onPointerDown(e) {
     if (e.button !== undefined && e.button !== 0) return;
-    setPointer(e);
 
-    if (state.mode === 'SLICE') {
-      if (activeCut && !state.solved) doCut();
+    // A second finger means a camera gesture (rotate/zoom). Cancel any drag in
+    // progress and ignore this pointer.
+    if (activePointerId !== null) {
+      pointerDown = null;
+      pendingCut = null;
+      if (isDragging) {
+        isDragging = false;
+        controls.enabled = true;
+        dragContext = null;
+        renderer.domElement.style.cursor = '';
+        syncMeshes();
+      }
       return;
     }
 
-    var p = pickBlock();
-    if (p) {
-      state.selectedGroupId = p.block.groupId;
-      initiateDrag(p.hit, p.block);
+    activePointerId = e.pointerId;
+    setPointer(e);
+    pointerDown = { x: e.clientX, y: e.clientY, time: Date.now(), moved: false };
+    pendingCut = null;
+
+    if (state.mode === 'SLICE') {
+      var p = pickBlock();
+      if (p && !state.solved) {
+        computeCutPreview(p.hit, p.block);
+        pendingCut = { axis: activeCut.axis, coord: activeCut.coord };
+        updateHint();
+      }
+      return;
+    }
+
+    var q = pickBlock();
+    if (q) {
+      state.selectedGroupId = q.block.groupId;
+      initiateDrag(q.hit, q.block);
     } else {
       state.selectedGroupId = null;
     }
@@ -562,27 +652,54 @@
     }
   }
 
-  function onPointerUp() {
-    if (!isDragging) return;
-    isDragging = false;
-    controls.enabled = true;
-    renderer.domElement.style.cursor = '';
+  function onPointerUp(e) {
+    if (e && e.pointerId !== undefined && activePointerId !== null && e.pointerId !== activePointerId) return;
+    activePointerId = null;
 
-    if (dragContext) {
-      var v = dragContext.valid;
-      if (v.x !== 0 || v.y !== 0 || v.z !== 0) {
-        pushHistory();
-        dragContext.offsets.forEach(function (off) {
-          for (var i = 0; i < state.blocks.length; i++) {
-            var b = state.blocks[i];
-            if (b.id === off.id) { b.x = off.x + v.x; b.y = off.y + v.y; b.z = off.z + v.z; break; }
-          }
-        });
+    var wasTap = pointerDown && !pointerDown.moved && (Date.now() - pointerDown.time) < TAP_TIME;
+
+    if (isDragging) {
+      isDragging = false;
+      controls.enabled = true;
+      renderer.domElement.style.cursor = '';
+
+      if (dragContext) {
+        var v = dragContext.valid;
+        if (v.x !== 0 || v.y !== 0 || v.z !== 0) {
+          pushHistory();
+          dragContext.offsets.forEach(function (off) {
+            for (var i = 0; i < state.blocks.length; i++) {
+              var b = state.blocks[i];
+              if (b.id === off.id) { b.x = off.x + v.x; b.y = off.y + v.y; b.z = off.z + v.z; break; }
+            }
+          });
+        }
+        dragContext = null;
       }
-      dragContext = null;
+      syncMeshes();
+      updateHint();
+    } else if (wasTap && state.mode === 'SLICE' && pendingCut && !state.solved) {
+      // A tap on a face cuts. A click on desktop behaves the same way.
+      activeCut = { axis: pendingCut.axis, coord: pendingCut.coord };
+      doCut();
     }
-    syncMeshes();
-    updateHint();
+
+    pointerDown = null;
+    pendingCut = null;
+  }
+
+  function onPointerCancel(e) {
+    if (e && e.pointerId !== undefined && activePointerId !== null && e.pointerId !== activePointerId) return;
+    activePointerId = null;
+    pointerDown = null;
+    pendingCut = null;
+    if (isDragging) {
+      isDragging = false;
+      controls.enabled = true;
+      dragContext = null;
+      renderer.domElement.style.cursor = '';
+      syncMeshes();
+    }
   }
 
   function applyPositions(list) {
@@ -739,10 +856,15 @@
     $('mode-slice').addEventListener('click', function () { setMode('SLICE'); });
     $('mode-move').addEventListener('click', function () { setMode('MOVE'); });
 
-    $('info-toggle').addEventListener('click', function () {
-      var body = $('info-body');
-      body.classList.toggle('collapsed');
-      this.setAttribute('aria-expanded', body.classList.contains('collapsed') ? 'false' : 'true');
+    function toggleInfo() {
+      var collapsed = $('info-body').classList.toggle('collapsed');
+      $('info-toggle').setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    }
+    $('info-toggle').addEventListener('click', function (e) { e.stopPropagation(); toggleInfo(); });
+    var infoHead = $('info-panel').querySelector('.panel-head');
+    infoHead.addEventListener('click', toggleInfo);
+    infoHead.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleInfo(); }
     });
 
     $('nudge').addEventListener('click', function (e) {
@@ -752,6 +874,9 @@
       nudgeGroup(parts[0], parseInt(parts[1], 10));
     });
 
+    $('rot-left').addEventListener('click', function () { rotateView(-0.28); });
+    $('rot-right').addEventListener('click', function () { rotateView(0.28); });
+
     $('why-inline').addEventListener('click', openProof);
     $('proof-close').addEventListener('click', closeModals);
     $('proof-prev').addEventListener('click', function () { proofGo(-1); });
@@ -760,14 +885,31 @@
     $('solve-again').addEventListener('click', function () { $('solve-modal').classList.add('hidden'); resetPuzzle(); });
     $('solve-why').addEventListener('click', function () { $('solve-modal').classList.add('hidden'); openProof(); });
 
-    if (window.innerWidth < 640) {
+    // Start minimised on phones and short windows so the cube has room.
+    if (window.innerWidth < 760 || window.innerHeight < 640) {
       $('info-body').classList.add('collapsed');
       $('info-toggle').setAttribute('aria-expanded', 'false');
     }
   }
 
+  function applyTouchMode() {
+    if (!controls || !controls.touches || !THREE.TOUCH) return;
+    // In Slice mode a single finger must not rotate the view (so taps cut
+    // cleanly); rotating is done with two fingers or the on-screen buttons.
+    controls.touches.ONE = (state.mode === 'MOVE') ? THREE.TOUCH.ROTATE : null;
+  }
+
+  function rotateView(angle) {
+    var p = camera.position.clone();
+    var c = Math.cos(angle), s = Math.sin(angle);
+    camera.position.set(p.x * c - p.z * s, p.y, p.x * s + p.z * c);
+    camera.lookAt(controls.target);
+    controls.update();
+  }
+
   function setMode(mode) {
     state.mode = mode;
+    applyTouchMode();
     var slice = $('mode-slice'), move = $('mode-move');
     slice.classList.toggle('active', mode === 'SLICE');
     move.classList.toggle('active', mode === 'MOVE');
@@ -793,12 +935,20 @@
     $('btn-undo').disabled = historyStack.length === 0;
   }
 
+  var _gcol = null;
+  function groupColor(gid) {
+    if (!_gcol) _gcol = new THREE.Color();
+    _gcol.setHSL((0.08 + gid * 0.618033988749895) % 1, 0.45, 0.58);
+    return _gcol;
+  }
+
   function updateVisuals() {
     meshes.forEach(function (m) {
       var b = null;
       for (var i = 0; i < state.blocks.length; i++) { if (state.blocks[i].id === m.userData.id) { b = state.blocks[i]; break; } }
       m.material.emissive.setHex(0x000000);
       if (!b) return;
+      m.material.color.copy(groupColor(b.groupId));
       var hover = hoveredGroupId !== null && b.groupId === hoveredGroupId;
       var selected = state.mode === 'MOVE' && state.selectedGroupId !== null && b.groupId === state.selectedGroupId;
       if (hover) m.material.emissive.setHex(state.mode === 'SLICE' ? 0x5a1f1f : 0x1f3a5a);
@@ -823,11 +973,11 @@
       } else if (activeCut) {
         hint.textContent = 'Plane ' + activeCut.axis.toUpperCase() + ' = ' + fmt(activeCut.coord) + ' \u00b7 no piece divided';
       } else {
-        hint.textContent = 'Hover a face to preview a cut';
+        hint.textContent = 'Tap a face to cut \u00b7 use \u2039 \u203a or two fingers to rotate';
       }
     } else {
       hint.textContent = state.selectedGroupId === null
-        ? 'Drag a piece to move it'
+        ? 'Drag a piece to move it \u00b7 drag the background to rotate'
         : 'Drag, use the nudge pad, or arrow keys / Q,E';
     }
   }
@@ -1009,8 +1159,20 @@
 
   function animate() {
     requestAnimationFrame(animate);
-    controls.update();
-    renderer.render(scene, camera);
+    try {
+      controls.update();
+      renderer.render(scene, camera);
+    } catch (err) {
+      showFatal('Rendering error: ' + (err && err.message ? err.message : err));
+    }
+  }
+
+  var fatalShown = false;
+  function showFatal(msg) {
+    if (fatalShown) return;
+    fatalShown = true;
+    var el = $('fallback');
+    if (el) { el.textContent = msg; el.classList.remove('hidden'); }
   }
 
   // Small hook so the behaviour can be verified without a UI (used by the test
@@ -1021,11 +1183,23 @@
     setMode: setMode,
     groups: function () { return new Set(state.blocks.map(function (b) { return b.groupId; })).size; },
     splits: function (axis, coord) { return countSplits(axis, coord); },
+    choose: chooseCut,
     cut: function (axis, coord) { activeCut = { axis: axis, coord: coord }; doCut(); }
   };
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-  else init();
+  function start() {
+    if (typeof THREE === 'undefined' || !THREE.WebGLRenderer || !THREE.OrbitControls) {
+      showFatal('The 3D library failed to load. Please reload the page.');
+      return;
+    }
+    try {
+      init();
+    } catch (err) {
+      showFatal('Could not start the 3D view: ' + (err && err.message ? err.message : err));
+    }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
 })();
 </script>
 </body>
