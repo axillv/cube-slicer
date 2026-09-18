@@ -36,6 +36,14 @@ idea is the key to the tiling problem in the video that popularised this teaser.
   (University of Cambridge), which generalises it to n×n×n.
 - Everything here (code, layout, text) was written for this project.
 
+## How this was made
+
+Built by [axillv](https://github.com/axillv) with AI coding assistance: the first
+prototype was generated with Gemini, then reworked, tested and documented with
+OpenCode. The choice of puzzle, the design, the proof wording, and the testing are
+human decisions; the AI wrote a lot of the code. No AI is involved at runtime — the
+page is plain static files.
+
 ## Development
 
 No build step. It is a single static page:
